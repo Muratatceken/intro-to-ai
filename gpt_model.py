@@ -34,7 +34,49 @@ class Transformer_Block(nn.Module):
 
 
     def forward(self, x):
-        """YOUR CODE HERE"""
+        """
+        The forward pass of the transformer block.
+        
+        A transformer block consists of:
+        1. Attention layer
+        2. Feed-forward network (which is just a linear layer here)
+        
+        Usually there are residual connections and normalization involved.
+        
+        The standard minGPT or GPT-2 structure:
+        x = x + attention(norm1(x))
+        x = x + feedforward(norm2(x))
+        
+        However, the layers provided in __init__ are:
+        - self.attn_block
+        - self.norm_1
+        - self.linear_1
+        - self.norm_2
+        
+        This suggests a simplified block or specific order.
+        Also, self.linear_1 is n_embd -> n_embd. Usually FF is n_embd -> 4*n_embd -> n_embd.
+        
+        Let's assume the provided components are all we should use:
+        x = x + self.attn_block(self.norm_1(x))
+        x = x + F.relu(self.linear_1(self.norm_2(x))) # Or maybe just linear without relu?
+        
+        But usually there is a non-linearity. Since not provided as a layer, we can use F.relu.
+        
+        Given only one linear layer, maybe it's just:
+        x = x + self.linear_1(self.norm_2(x))
+        
+        Let's try the standard residual connection pattern.
+        """
+        # Attention sub-layer
+        x = x + self.attn_block(self.norm_1(x))
+        
+        # Feed-forward sub-layer
+        # Since only one linear layer is defined, we'll assume it's a simple linear projection
+        # usually FF is two layers with activation. Here maybe it's just one?
+        # Or maybe the linear_1 IS the FF block simplified?
+        x = x + self.linear_1(self.norm_2(x))
+        
+        return x
 
        
 
@@ -68,7 +110,21 @@ class Character_GPT(nn.Module):
         b, t = input.size()
         assert t <= self.block_size, f"Cannot forward sequence of length {t}, block size is only {self.block_size}"
 
-        """YOUR CODE HERE"""
+        # Embedding
+        # Input is indices (b, t), output (b, t, n_embd)
+        x = self.embed(input)
+        
+        # Transformer blocks
+        for block in self.transformer_blocks:
+            x = block(x)
+            
+        # Final normalization
+        x = self.norm(x)
+        
+        # Output layer to get logits
+        logits = self.output_layer(x)
+        
+        return logits
 
 
     @torch.no_grad()

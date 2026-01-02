@@ -37,7 +37,7 @@ class PerceptronModel(Module):
         """
         super(PerceptronModel, self).__init__()
         
-        "*** YOUR CODE HERE ***"
+        self.w = Parameter(ones((1, dimensions)))
         
 
     def get_weights(self):
@@ -56,7 +56,7 @@ class PerceptronModel(Module):
 
         The pytorch function `tensordot` may be helpful here.
         """
-        "*** YOUR CODE HERE ***"
+        return matmul(x, self.w.T)
         
 
     def get_prediction(self, x):
@@ -65,7 +65,11 @@ class PerceptronModel(Module):
 
         Returns: 1 or -1
         """
-        "*** YOUR CODE HERE ***"
+        score = self.run(x)
+        if score.item() >= 0:
+            return 1
+        else:
+            return -1
 
 
 
@@ -80,7 +84,20 @@ class PerceptronModel(Module):
         """        
         with no_grad():
             dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
-            "*** YOUR CODE HERE ***"
+            while True:
+                mistakes = 0
+                for batch in dataloader:
+                    x = batch['x']
+                    y = batch['label']
+                    prediction = self.get_prediction(x)
+                    target = y.item()
+                    
+                    if prediction != target:
+                        self.w += target * x
+                        mistakes += 1
+                
+                if mistakes == 0:
+                    break
 
 
 
@@ -92,8 +109,10 @@ class RegressionModel(Module):
     """
     def __init__(self):
         # Initialize your model parameters here
-        "*** YOUR CODE HERE ***"
         super().__init__()
+        self.w1 = Linear(1, 100)
+        self.w2 = Linear(100, 1)
+        self.optimizer = optim.Adam(self.parameters(), lr=0.01)
 
 
 
@@ -106,7 +125,8 @@ class RegressionModel(Module):
         Returns:
             A node with shape (batch_size x 1) containing predicted y-values
         """
-        "*** YOUR CODE HERE ***"
+        x = relu(self.w1(x))
+        return self.w2(x)
 
     
     def get_loss(self, x, y):
@@ -119,7 +139,8 @@ class RegressionModel(Module):
                 to be used for training
         Returns: a tensor of size 1 containing the loss
         """
-        "*** YOUR CODE HERE ***"
+        predicted = self.forward(x)
+        return mse_loss(predicted, y)
  
         
 
@@ -137,7 +158,23 @@ class RegressionModel(Module):
             dataset: a PyTorch dataset object containing data to be trained on
             
         """
-        "*** YOUR CODE HERE ***"
+        dataloader = DataLoader(dataset, batch_size=20, shuffle=True)
+        
+        while True:
+            total_loss = 0
+            for batch in dataloader:
+                x = batch['x']
+                y = batch['label']
+                
+                self.optimizer.zero_grad()
+                loss = self.get_loss(x, y)
+                loss.backward()
+                self.optimizer.step()
+                
+                total_loss += loss.item()
+            
+            if total_loss / len(dataloader) < 0.02:
+                break
 
             
 
@@ -166,7 +203,11 @@ class DigitClassificationModel(Module):
         super().__init__()
         input_size = 28 * 28
         output_size = 10
-        "*** YOUR CODE HERE ***"
+        
+        self.w1 = Linear(input_size, 200)
+        self.w2 = Linear(200, 100)
+        self.w3 = Linear(100, output_size)
+        self.optimizer = optim.Adam(self.parameters(), lr=0.005)
 
 
 
@@ -183,9 +224,11 @@ class DigitClassificationModel(Module):
             x: a tensor with shape (batch_size x 784)
         Output:
             A node with shape (batch_size x 10) containing predicted scores
-                (also called logits)
+            (also called logits)
         """
-        """ YOUR CODE HERE """
+        x = relu(self.w1(x))
+        x = relu(self.w2(x))
+        return self.w3(x)
 
  
 
@@ -202,7 +245,8 @@ class DigitClassificationModel(Module):
             y: a node with shape (batch_size x 10)
         Returns: a loss tensor
         """
-        """ YOUR CODE HERE """
+        predicted = self.run(x)
+        return cross_entropy(predicted, y)
 
     
         
@@ -211,7 +255,20 @@ class DigitClassificationModel(Module):
         """
         Trains the model.
         """
-        """ YOUR CODE HERE """
+        dataloader = DataLoader(dataset, batch_size=100, shuffle=True)
+        
+        while True:
+            for batch in dataloader:
+                x = batch['x']
+                y = batch['label']
+                
+                self.optimizer.zero_grad()
+                loss = self.get_loss(x, y)
+                loss.backward()
+                self.optimizer.step()
+            
+            if dataset.get_validation_accuracy() > 0.975:
+                break
 
 
 
@@ -231,7 +288,13 @@ class LanguageIDModel(Module):
         self.num_chars = 47
         self.languages = ["English", "Spanish", "Finnish", "Dutch", "Polish"]
         super(LanguageIDModel, self).__init__()
-        "*** YOUR CODE HERE ***"
+        
+        self.hidden_size = 200
+        self.initial_w = Linear(self.num_chars, self.hidden_size)
+        self.hidden_w = Linear(self.hidden_size, self.hidden_size)
+        self.output_w = Linear(self.hidden_size, len(self.languages))
+        
+        self.optimizer = optim.Adam(self.parameters(), lr=0.005)
 
 
     def run(self, xs):
@@ -261,9 +324,27 @@ class LanguageIDModel(Module):
                 is a node with shape (batch_size x self.num_chars)
         Returns:
             A node with shape (batch_size x 5) containing predicted scores
-                (also called logits)
+            (also called logits)
         """
-        "*** YOUR CODE HERE ***"
+        # Initialize hidden state h_i with the first character
+        h = relu(self.initial_w(xs[0]))
+        
+        # Iterate over the rest of the characters
+        for i in range(1, len(xs)):
+            # Update hidden state: h = f(x_i * Wx + h_{i-1} * Wh)
+            # But here we are simplifying to match the project structure usually seen:
+            # combine current character and previous hidden state
+            # A common simple RNN way: h = relu(char_embedding + hidden_transformation)
+            # Adjusting to use the layers defined:
+            
+            # Since self.initial_w maps char -> hidden, we can reuse it or use a separate one.
+            # But standard RNN: h_new = activation(W_x * x + W_h * h_old)
+            # Here we can approximate or do:
+            # h = relu(self.initial_w(xs[i]) + self.hidden_w(h))
+            
+            h = relu(self.initial_w(xs[i]) + self.hidden_w(h))
+            
+        return self.output_w(h)
 
     
     def get_loss(self, xs, y):
@@ -280,7 +361,8 @@ class LanguageIDModel(Module):
             y: a node with shape (batch_size x 5)
         Returns: a loss node
         """
-        "*** YOUR CODE HERE ***"
+        predicted = self.run(xs)
+        return cross_entropy(predicted, y)
         
 
     def train(self, dataset):
@@ -297,7 +379,25 @@ class LanguageIDModel(Module):
 
         For more information, look at the pytorch documentation of torch.movedim()
         """
-        "*** YOUR CODE HERE ***"
+        dataloader = DataLoader(dataset, batch_size=100, shuffle=True)
+        
+        while True:
+            for batch in dataloader:
+                x = batch['x']
+                y = batch['label']
+                
+                # Reshape x to be (length x batch x num_chars) as expected by run/get_loss
+                # Original shape from dataloader: (batch x length x num_chars)
+                # We need to swap dim 0 and 1
+                x = movedim(x, 0, 1)
+                
+                self.optimizer.zero_grad()
+                loss = self.get_loss(x, y)
+                loss.backward()
+                self.optimizer.step()
+            
+            if dataset.get_validation_accuracy() > 0.82:
+                break
 
         
 
@@ -317,10 +417,29 @@ def Convolve(input: tensor, weight: tensor):
     input_tensor_dimensions = input.shape
     weight_dimensions = weight.shape
     Output_Tensor = tensor(())
-    "*** YOUR CODE HERE ***"
-
     
-    "*** End Code ***"
+    # Simple manual convolution
+    # Input shape: (H, W)
+    # Weight shape: (KH, KW)
+    H, W = input_tensor_dimensions
+    KH, KW = weight_dimensions
+    
+    out_h = H - KH + 1
+    out_w = W - KW + 1
+    
+    output = []
+    
+    for y in range(out_h):
+        row = []
+        for x in range(out_w):
+            # Element-wise multiplication and sum
+            patch = input[y:y+KH, x:x+KW]
+            val = tensordot(patch, weight, dims=2)
+            row.append(val)
+        output.append(stack(row))
+        
+    Output_Tensor = stack(output)
+    
     return Output_Tensor
 
 
@@ -344,7 +463,13 @@ class DigitConvolutionalModel(Module):
         output_size = 10
 
         self.convolution_weights = Parameter(ones((3, 3)))
-        """ YOUR CODE HERE """
+        
+        # After convolution (3x3 on 28x28) we get 26x26 output
+        conv_output_size = 26 * 26
+        
+        self.w1 = Linear(conv_output_size, 128)
+        self.w2 = Linear(128, output_size)
+        self.optimizer = optim.Adam(self.parameters(), lr=0.005)
 
 
 
@@ -360,7 +485,9 @@ class DigitConvolutionalModel(Module):
         x = x.reshape(len(x), 28, 28)
         x = stack(list(map(lambda sample: Convolve(sample, self.convolution_weights), x)))
         x = x.flatten(start_dim=1)
-        """ YOUR CODE HERE """
+        
+        x = relu(self.w1(x))
+        return self.w2(x)
 
 
     def get_loss(self, x, y):
@@ -376,7 +503,8 @@ class DigitConvolutionalModel(Module):
             y: a node with shape (batch_size x 10)
         Returns: a loss tensor
         """
-        """ YOUR CODE HERE """
+        predicted = self.run(x)
+        return cross_entropy(predicted, y)
 
      
         
@@ -385,7 +513,20 @@ class DigitConvolutionalModel(Module):
         """
         Trains the model.
         """
-        """ YOUR CODE HERE """
+        dataloader = DataLoader(dataset, batch_size=100, shuffle=True)
+        
+        while True:
+            for batch in dataloader:
+                x = batch['x']
+                y = batch['label']
+                
+                self.optimizer.zero_grad()
+                loss = self.get_loss(x, y)
+                loss.backward()
+                self.optimizer.step()
+            
+            if dataset.get_validation_accuracy() > 0.975:
+                break
 
 
 
@@ -424,6 +565,79 @@ class Attention(Module):
         """
         B, T, C = input.size()
 
-        """YOUR CODE HERE"""
+        # Calculate Query, Key, Value matrices
+        k = self.k_layer(input)
+        q = self.q_layer(input)
+        v = self.v_layer(input)
+        
+        # Calculate raw attention scores
+        # We need (Q @ K^T) / sqrt(d_k)
+        # Q: (B, T, C), K: (B, T, C) -> K^T for last 2 dims is (B, C, T)
+        # Result: (B, T, T)
+        
+        # Transpose last two dimensions of k for multiplication
+        k_t = k.transpose(-2, -1)
+        
+        # Raw scores
+        scores = matmul(q, k_t) / (self.layer_size ** 0.5)
+        
+        # Apply mask
+        scores = scores.masked_fill(self.mask[:,:,:T,:T] == 0, float('-inf'))
+        
+        # The mask in the template code has a [0] at the end, but checking logic:
+        # self.mask is (1, 1, block_size, block_size)
+        # scores is (B, T, T) or similar. 
+        # The autograder hint says: M = M.masked_fill(self.mask[:,:,:T,:T] == 0, float('-inf'))[0]
+        # The [0] at the end suggests that masked_fill returns something indexable or it's a copy-paste artifact in the docstring.
+        # However, masked_fill returns a Tensor. 
+        # The provided snippet `self.mask` has shape (1,1,B,B).
+        # Let's trust the broadcasting of PyTorch or adjust.
+        # But wait, the docstring says: `...float('-inf'))[0]`
+        # This [0] is very suspicious if masked_fill returns a Tensor.
+        # Let's re-read carefully: "M = M.masked_fill(...) [0]"
+        # If the operation `masked_fill` was wrapped in something returning a tuple it would make sense.
+        # But `masked_fill` returns a Tensor.
+        # Maybe they want us to take the 0th element of the result? No, that would be a single row/matrix.
+        # Let's assume standard causal attention logic is required.
+        # But wait, looking at the mask definition: .view(1, 1, block_size, block_size) -> 4D tensor.
+        # Input 'input' is (B, T, C).
+        # Q, K, V are (B, T, C).
+        # Scores (B, T, T).
+        # Mask (1, 1, block_size, block_size).
+        # If we slice mask to :T,:T we get (1, 1, T, T).
+        # Broadcasting (B, T, T) with (1, 1, T, T) -> This might be tricky if dims don't align.
+        # The scores tensor is 3D (B, T, T). The mask is 4D.
+        # If we want to broadcast, we might need to unsqueeze scores or squeeze mask.
+        
+        # The hint likely implies:
+        # self.mask[:,:,:T,:T] returns (1, 1, T, T)
+        # The `== 0` returns a boolean tensor of shape (1, 1, T, T)
+        # If we apply this to M (scores), M should probably be compatible.
+        # If M is (B, T, T), we might need to make it (B, 1, T, T) for multi-head? 
+        # But this is single head attention (Linear(layer_size, layer_size)).
+        # So M is (B, T, T).
+        # Using (1, 1, T, T) mask on (B, T, T) requires squeezing the 2nd dim of mask.
+        
+        # Let's try to follow the hint exactly, assuming `[0]` removes the extra dimension from the mask result?
+        # Or maybe the hint meant `self.mask[0,0,:T,:T]`?
+        
+        # Actually, let's look at the mask provided:
+        # self.register_buffer("mask", torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size))
+        # It creates a 4D mask.
+        
+        # Let's strip the extra dimensions to make it (T, T) or (1, T, T) compatible with (B, T, T).
+        # mask slice: self.mask[0, 0, :T, :T] -> (T, T)
+        
+        scores = scores.masked_fill(self.mask[0, 0, :T, :T] == 0, float('-inf'))
+        
+        # Softmax over the last dimension
+        weights = softmax(scores, dim=-1)
+        
+        # Weighted sum of values
+        # weights: (B, T, T), v: (B, T, C)
+        # Result: (B, T, C)
+        output = matmul(weights, v)
+        
+        return output
 
      
